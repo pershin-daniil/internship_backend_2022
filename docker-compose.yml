@@ -1,0 +1,16 @@
+version: "3"
+services:
+  db:
+    image: postgres:14.2-alpine
+    container_name: internship
+    environment:
+      POSTGRES_DB: internship
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "6432:5432"
+    volumes:
+      - pg:/var/lib/postgresql/data
+
+volumes:
+  pg:

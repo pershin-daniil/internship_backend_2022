@@ -1,0 +1,52 @@
+openapi: 3.0.0
+info:
+  title: Avito.tech Internship Backend 2022
+  description: >-
+    Microservice for working with the balance of users.
+  contact:
+    email: dev@pershin-daniil.ru
+  version: 0.0.1
+externalDocs:
+  description: GitHub
+  url: https://github.com/pershin-daniil/internship_backend_2022
+servers:
+  - url: https://localhost:8080/api/v1
+paths:
+  /addFunds:
+    post:
+      tags:
+        - methods
+      summary: The method of adding funds to the balance. Takes the user id, transaction uuid and how much money to add.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/addFundsBody'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/addFundsBody'
+        410:
+          description: Returns status code and word "Gone" which means transaction has already made.
+
+
+components:
+  schemas:
+    addFundsBody:
+      type: object
+      properties:
+        transactionID:
+          type: string
+          format: uuid
+          example: 8333d1d6-57bd-415b-8668-97c4612a772d
+        userID:
+          type: integer
+          format: int
+          example: 10
+        account_balance:
+          type: integer
+          format: int
+          example: 100
