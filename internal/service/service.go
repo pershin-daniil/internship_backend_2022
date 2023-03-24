@@ -15,6 +15,7 @@ import (
 
 type Store interface {
 	AddFunds(ctx context.Context, data models.AddFundsRequest) (models.AddFundsRequest, error)
+	ReserveFunds(ctx context.Context, data models.ReservedFundsRequest) (models.ReservedFundsRequest, error)
 }
 
 type Service struct {
@@ -35,4 +36,12 @@ func (s *Service) AddFunds(ctx context.Context, data models.AddFundsRequest) (mo
 		return models.AddFundsRequest{}, fmt.Errorf("service: %w", err)
 	}
 	return user, nil
+}
+
+func (s *Service) ReserveFunds(ctx context.Context, data models.ReservedFundsRequest) (models.ReservedFundsRequest, error) {
+	reserve, err := s.store.ReserveFunds(ctx, data)
+	if err != nil {
+		return models.ReservedFundsRequest{}, fmt.Errorf("service: %w", err)
+	}
+	return reserve, nil
 }

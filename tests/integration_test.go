@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
+	"testing"
+	"time"
+
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pershin-daniil/internship_backend_2022/internal/logger"
@@ -13,9 +17,6 @@ import (
 	"github.com/pershin-daniil/internship_backend_2022/internal/service"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
-	"net/http"
-	"testing"
-	"time"
 )
 
 var pgDSN = "postgres://postgres:secret@localhost:6432/internship?sslmode=disable"
@@ -53,7 +54,6 @@ func (s *IntegrationTestSuite) SetupSuite() {
 	time.Sleep(100 * time.Millisecond)
 	err = s.store.ResetTables(ctx, []string{"history", "users"})
 	s.Require().NoError(err)
-
 }
 
 func (s *IntegrationTestSuite) SetupTest() {
@@ -61,7 +61,6 @@ func (s *IntegrationTestSuite) SetupTest() {
 }
 
 func (s *IntegrationTestSuite) TestAddFunds() {
-	s.T().Log(uuid.NewString())
 	s.Run("addFunds for new user", func() {
 		ctx := context.Background()
 		var respUser models.AddFundsRequest
@@ -87,6 +86,12 @@ func (s *IntegrationTestSuite) TestAddFunds() {
 		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.user, &respUser)
 		s.Require().Equal(http.StatusGone, resp.StatusCode)
 		s.Require().Equal(s.user.Balance*2, 200)
+	})
+}
+
+func (s *IntegrationTestSuite) TestReserveFunds() {
+	s.Run("reserveFunds normal case", func() {
+		s.T().Skip()
 	})
 }
 
