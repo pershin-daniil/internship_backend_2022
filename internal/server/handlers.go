@@ -3,17 +3,18 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"github.com/pershin-daniil/internship_backend_2022/internal/pgstore"
 	"net/http"
 
 	"github.com/pershin-daniil/internship_backend_2022/internal/models"
 )
 
-var (
-	txs = make(map[string]struct{})
-)
+var txs = make(map[string]struct{})
 
 type App interface {
 	AddFunds(ctx context.Context, data models.AddFundsRequest) (models.AddFundsRequest, error)
+	ReserveFunds(ctx context.Context, data models.ReservedFundsRequest) (models.ReservedFundsRequest, error)
 }
 
 func (s *Server) rootHandler(w http.ResponseWriter, r *http.Request) {
@@ -46,6 +47,31 @@ func (s *Server) addFundsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) reserveFundsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var data models.ReservedFundsRequest
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		s.writeResponse(w, http.StatusBadRequest, err)
+		return
+	}
+	if _, ok := txs[data.TransactionID]; ok {
+		s.writeResponse(w, http.StatusGone, nil)
+		return
+	}
+	txs[data.TransactionID] = struct{}{}
+	s.log.Infof("%s", data.TransactionID)
+	resp, err := s.app.ReserveFunds(ctx, data)
+	switch {
+	case errors.Is(err, pgstore.ErrOrderAlreadyAdded):
+		s.log.Warnf("err during reserve funds: %v", err)
+		s.writeResponse(w, http.StatusBadRequest, err)
+		return
+	case err != nil:
+		s.log.Warnf("err during reserve funds: %v", err)
+		s.writeResponse(w, http.StatusInternalServerError, err)
+		return
+	}
+	resp.TransactionID = data.TransactionID
+	s.writeResponse(w, http.StatusOK, resp)
 }
 
 func (s *Server) recognizeRevenueHandler(w http.ResponseWriter, r *http.Request) {
