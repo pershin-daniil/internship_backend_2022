@@ -38,10 +38,10 @@ func New(ctx context.Context, log *logrus.Logger, dsn string) (*Store, error) {
 	}, nil
 }
 
-func (s *Store) AddFunds(ctx context.Context, data models.AddFundsRequest) (models.AddFundsResponse, error) {
+func (s *Store) AddFunds(ctx context.Context, data models.AddFundsRequest) (models.WalletResponse, error) {
 	tx, err := s.db.Beginx()
 	if err != nil {
-		return models.AddFundsResponse{}, fmt.Errorf("add funds faild: %w", err)
+		return models.WalletResponse{}, fmt.Errorf("add funds faild: %w", err)
 	}
 	defer func() {
 		if err = tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
@@ -58,19 +58,19 @@ ON CONFLICT (user_id) DO UPDATE SET
 				updated_at = NOW()
 RETURNING id, user_id, account_balance, reserved, updated_at;`)
 
-	var result models.AddFundsResponse
+	var result models.WalletResponse
 
 	for i := 0; i < retries; i++ {
 		if err = tx.GetContext(ctx, &result, query.String(), data.UserID, data.Balance); err != nil {
 			continue
 		}
 		if err = tx.Commit(); err != nil {
-			return models.AddFundsResponse{}, err
+			return models.WalletResponse{}, err
 		}
 		return result, nil
 	}
 
-	return models.AddFundsResponse{}, fmt.Errorf("add funds faild: %w", err)
+	return models.WalletResponse{}, fmt.Errorf("add funds faild: %w", err)
 }
 
 func (s *Store) ReserveFunds(ctx context.Context, data models.ReservedFundsRequest) (models.EventsBodyResponse, error) {
@@ -156,6 +156,25 @@ RETURNING id, wallet_id, service_id, order_id, price, status, datetime`
 		return result, nil
 	}
 	return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue faild: %w", err)
+}
+
+func (s *Store) WalletBalance(ctx context.Context, data models.BalanceRequest) (models.WalletResponse, error) {
+	query := `
+SELECT id, user_id, account_balance, reserved, updated_at FROM wallets
+WHERE user_id = $1`
+	var result models.WalletResponse
+	var err error
+	for i := 0; i < retries; i++ {
+		err = s.db.GetContext(ctx, &result, query, data.UserID)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return models.WalletResponse{}, ErrUserNotExists
+		case err != nil:
+			continue
+		}
+		return result, nil
+	}
+	return models.WalletResponse{}, fmt.Errorf("get user balance faild: %w", err)
 }
 
 type q interface {

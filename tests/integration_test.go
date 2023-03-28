@@ -32,6 +32,7 @@ const (
 	addFundsEndpoint         = "/api/v1/addFunds"
 	reserveFundsEndpoint     = "/api/v1/reserveFunds"
 	recognizeRevenueEndpoint = "/api/v1/recognizeRevenue"
+	getWalletBalanceEndpoint = "/api/v1/getUserBalance"
 )
 
 type IntegrationTestSuite struct {
@@ -43,6 +44,7 @@ type IntegrationTestSuite struct {
 	models.AddFundsRequest
 	models.ReservedFundsRequest
 	models.RecognizeRevenueRequest
+	models.BalanceRequest
 }
 
 func (s *IntegrationTestSuite) SetupSuite() {
@@ -64,7 +66,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 func (s *IntegrationTestSuite) SetupTest() {
 	s.AddFundsRequest = models.AddFundsRequest{
 		TransactionID: uuid.NewString(),
-		UserID:        uuid.ClockSequence(),
+		UserID:        1234,
 		Balance:       100,
 	}
 	s.ReservedFundsRequest = models.ReservedFundsRequest{
@@ -81,33 +83,52 @@ func (s *IntegrationTestSuite) SetupTest() {
 		OrderID:       1111,
 		Status:        "DONE",
 	}
+	s.BalanceRequest = models.BalanceRequest{UserID: 1234}
 }
 
 func (s *IntegrationTestSuite) TestMainWorkFlow() {
 	s.Run("addFunds for new user", func() {
 		ctx := context.Background()
-		s.T().Log(s.AddFundsRequest)
-		var respUser models.AddFundsResponse
-		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.AddFundsRequest, &respUser)
-		s.T().Log(respUser)
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.AddFundsRequest, &respData)
 		s.Require().Equal(http.StatusOK, resp.StatusCode)
-		s.Require().Equal(s.AddFundsRequest.UserID, respUser.UserID)
-		s.Require().Equal(s.AddFundsRequest.Balance, respUser.Balance)
+		s.Require().Equal(s.AddFundsRequest.UserID, respData.UserID)
+		s.Require().Equal(s.AddFundsRequest.Balance, respData.Balance)
+	})
+
+	s.Run("getBalance normal case", func() {
+		ctx := context.Background()
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodGet, getWalletBalanceEndpoint, s.BalanceRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.BalanceRequest.UserID, respData.UserID)
+		s.Require().Equal(100, respData.Balance)
+		s.Require().Equal(0, respData.Reserved)
 	})
 
 	s.Run("addFunds for old user", func() {
 		s.AddFundsRequest.TransactionID = uuid.NewString()
 		ctx := context.Background()
-		var respData models.AddFundsResponse
+		var respData models.WalletResponse
 		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.AddFundsRequest, &respData)
 		s.Require().Equal(http.StatusOK, resp.StatusCode)
 		s.Require().Equal(s.AddFundsRequest.UserID, respData.UserID)
 		s.Require().Equal(s.AddFundsRequest.Balance*2, respData.Balance)
 	})
 
+	s.Run("getBalance normal case 2", func() {
+		ctx := context.Background()
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodGet, getWalletBalanceEndpoint, s.BalanceRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.BalanceRequest.UserID, respData.UserID)
+		s.Require().Equal(200, respData.Balance)
+		s.Require().Equal(0, respData.Reserved)
+	})
+
 	s.Run("addFunds for already added transaction", func() {
 		ctx := context.Background()
-		var respUser models.AddFundsResponse
+		var respUser models.WalletResponse
 		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.AddFundsRequest, &respUser)
 		s.Require().Equal(http.StatusGone, resp.StatusCode)
 		s.Require().Equal(s.AddFundsRequest.Balance*2, 200)
@@ -124,6 +145,16 @@ func (s *IntegrationTestSuite) TestMainWorkFlow() {
 		s.Require().Equal(s.ReservedFundsRequest.Price, respData.Price)
 	})
 
+	s.Run("getBalance with reserve", func() {
+		ctx := context.Background()
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodGet, getWalletBalanceEndpoint, s.BalanceRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.BalanceRequest.UserID, respData.UserID)
+		s.Require().Equal(200, respData.Balance)
+		s.Require().Equal(s.ReservedFundsRequest.Price, respData.Reserved)
+	})
+
 	s.Run("reserveFunds one more order", func() {
 		ctx := context.Background()
 		var respData models.EventsBodyResponse
@@ -136,6 +167,16 @@ func (s *IntegrationTestSuite) TestMainWorkFlow() {
 		s.Require().Equal(s.ReservedFundsRequest.ServiceID, respData.ServiceID)
 		s.Require().Equal(s.ReservedFundsRequest.OrderID, respData.OrderID)
 		s.Require().Equal(s.ReservedFundsRequest.Price, respData.Price)
+	})
+
+	s.Run("getBalance with reserve 2", func() {
+		ctx := context.Background()
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodGet, getWalletBalanceEndpoint, s.BalanceRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.BalanceRequest.UserID, respData.UserID)
+		s.Require().Equal(200, respData.Balance)
+		s.Require().Equal(60, respData.Reserved)
 	})
 
 	s.Run("reserveFunds for already added transaction", func() {

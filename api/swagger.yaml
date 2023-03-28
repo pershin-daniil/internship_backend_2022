@@ -28,12 +28,70 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/addFundsResponse'
+                $ref: '#/components/schemas/walletResponse'
         410:
           description: Gone. Transaction already has been made.
+  /reserveFunds:
+    post:
+      tags:
+        - methods
+      summary: The method of reserving funds from the main balance in a separate account.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/reservedFundsRequest'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/eventsBodyResponse'
+  /recognizeRevenue:
+    post:
+      tags:
+        - methods
+      summary: Revenue recognition method - writes off money from the reserve, adds data to the report for accounting.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/recognizeRevenueRequest'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/eventsBodyResponse'
+  /getUserBalance:
+    get:
+      tags:
+        - methods
+      summary: The method of obtaining a user's balance.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/balanceRequest'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/walletResponse'
 
 components:
   schemas:
+    balanceRequest:
+      type: object
+      properties:
+        userID:
+          type: integer
+          format: int
+          example: 1
     addFundsRequest:
       type: object
       properties:
@@ -45,11 +103,11 @@ components:
           type: integer
           format: int
           example: 10
-        account_balance:
+        balance:
           type: integer
           format: int
           example: 100
-    addFundsResponse:
+    walletResponse:
       type: object
       properties:
         id:
@@ -60,10 +118,89 @@ components:
           type: integer
           format: int
           example: 10
-        account_balance:
+        balance:
           type: integer
           format: int
           example: 100
+        reserved:
+          type: integer
+          format: int
+          example: 10
+        updatedAt:
+          type: string
+          format: 'date-time'
+          example: '2023-03-27T12:07:33.352266+03:00'
+    reservedFundsRequest:
+      type: object
+      properties:
+        transactionID:
+          type: string
+          format: uuid
+          example: 8333d1d6-57bd-415b-8668-97c4612a772d
+        walletID:
+          type: integer
+          format: int
+          example: 1
+        serviceID:
+          type: integer
+          format: int
+          example: 1
+        orderID:
+          type: integer
+          format: int
+          example: 1
+        price:
+          type: integer
+          format: int
+          example: 100
+    recognizeRevenueRequest:
+      type: object
+      properties:
+        transactionID:
+          type: string
+          format: uuid
+          example: 8333d1d6-57bd-415b-8668-97c4612a772d
+        walletID:
+          type: integer
+          format: int
+          example: 1
+        serviceID:
+          type: integer
+          format: int
+          example: 1
+        orderID:
+          type: integer
+          format: int
+          example: 1
+        status:
+          type: string
+          example: DONE
+    eventsBodyResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int
+          example: 1
+        walletID:
+          type: integer
+          format: int
+          example: 1
+        serviceID:
+          type: integer
+          format: int
+          example: 1
+        orderID:
+          type: integer
+          format: int
+          example: 1
+        price:
+          type: integer
+          format: int
+          example: 100
+        status:
+          type: string
+          example: "DONE"
         updatedAt:
           type: string
           format: 'date-time'

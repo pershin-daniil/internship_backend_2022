@@ -13,7 +13,8 @@ import (
 var txs = make(map[string]struct{})
 
 type App interface {
-	AddFunds(ctx context.Context, data models.AddFundsRequest) (models.AddFundsResponse, error)
+	AddFunds(ctx context.Context, data models.AddFundsRequest) (models.WalletResponse, error)
+	WalletBalance(ctx context.Context, data models.BalanceRequest) (models.WalletResponse, error)
 	ReserveFunds(ctx context.Context, data models.ReservedFundsRequest) (models.EventsBodyResponse, error)
 	RecognizeRevenue(ctx context.Context, data models.RecognizeRevenueRequest) (models.EventsBodyResponse, error)
 }
@@ -83,7 +84,6 @@ func (s *Server) recognizeRevenueHandler(w http.ResponseWriter, r *http.Request)
 	resp, err := s.app.RecognizeRevenue(ctx, data)
 	switch {
 	case errors.Is(err, pgstore.ErrOrderNotExists):
-		s.log.Warnf("err during recognize revenue: %v", err)
 		s.writeResponse(w, http.StatusBadRequest, err)
 		return
 	case err != nil:
@@ -95,6 +95,21 @@ func (s *Server) recognizeRevenueHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) getUserBalance(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var data models.BalanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		s.writeResponse(w, http.StatusBadRequest, nil)
+		return
+	}
+	resp, err := s.app.WalletBalance(ctx, data)
+	switch {
+	case errors.Is(err, pgstore.ErrUserNotExists):
+		s.writeResponse(w, http.StatusBadRequest, err)
+	case err != nil:
+		s.log.Warnf("err during getting balance (id %d): %v", data.UserID, err)
+		return
+	}
+	s.writeResponse(w, http.StatusOK, resp)
 }
 
 func (s *Server) writeResponse(w http.ResponseWriter, status int, data interface{}) {

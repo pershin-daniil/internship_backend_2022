@@ -8,7 +8,11 @@ type AddFundsRequest struct {
 	Balance       int    `json:"balance" db:"account_balance"`
 }
 
-type AddFundsResponse struct {
+type BalanceRequest struct {
+	UserID int `json:"userID"`
+}
+
+type WalletResponse struct {
 	ID        int       `json:"id" db:"id"`
 	UserID    int       `json:"userID" db:"user_id"`
 	Balance   int       `json:"balance" db:"account_balance"`

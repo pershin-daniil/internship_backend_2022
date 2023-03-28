@@ -10,9 +10,10 @@ import (
 )
 
 type Store interface {
-	AddFunds(ctx context.Context, data models.AddFundsRequest) (models.AddFundsResponse, error)
+	AddFunds(ctx context.Context, data models.AddFundsRequest) (models.WalletResponse, error)
 	ReserveFunds(ctx context.Context, data models.ReservedFundsRequest) (models.EventsBodyResponse, error)
 	RecognizeRevenue(ctx context.Context, data models.RecognizeRevenueRequest) (models.EventsBodyResponse, error)
+	WalletBalance(ctx context.Context, data models.BalanceRequest) (models.WalletResponse, error)
 }
 
 type Service struct {
@@ -27,10 +28,10 @@ func New(log *logrus.Logger, store Store) *Service {
 	}
 }
 
-func (s *Service) AddFunds(ctx context.Context, data models.AddFundsRequest) (models.AddFundsResponse, error) {
+func (s *Service) AddFunds(ctx context.Context, data models.AddFundsRequest) (models.WalletResponse, error) {
 	wallet, err := s.store.AddFunds(ctx, data)
 	if err != nil {
-		return models.AddFundsResponse{}, fmt.Errorf("service: %w", err)
+		return models.WalletResponse{}, fmt.Errorf("service: %w", err)
 	}
 	return wallet, nil
 }
@@ -49,4 +50,12 @@ func (s *Service) RecognizeRevenue(ctx context.Context, data models.RecognizeRev
 		return models.EventsBodyResponse{}, fmt.Errorf("service: %w", err)
 	}
 	return recognized, nil
+}
+
+func (s *Service) WalletBalance(ctx context.Context, data models.BalanceRequest) (models.WalletResponse, error) {
+	balance, err := s.store.WalletBalance(ctx, data)
+	if err != nil {
+		return models.WalletResponse{}, fmt.Errorf("service: %w", err)
+	}
+	return balance, nil
 }
