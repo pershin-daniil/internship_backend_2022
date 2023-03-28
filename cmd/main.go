@@ -7,11 +7,12 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/pershin-daniil/internship_backend_2022/pkg/pgstore"
+	"github.com/pershin-daniil/internship_backend_2022/pkg/service"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pershin-daniil/internship_backend_2022/internal/logger"
-	"github.com/pershin-daniil/internship_backend_2022/internal/pgstore"
 	"github.com/pershin-daniil/internship_backend_2022/internal/server"
-	"github.com/pershin-daniil/internship_backend_2022/internal/service"
 )
 
 const (

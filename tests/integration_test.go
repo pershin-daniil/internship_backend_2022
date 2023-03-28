@@ -8,13 +8,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pershin-daniil/internship_backend_2022/pkg/models"
+	"github.com/pershin-daniil/internship_backend_2022/pkg/pgstore"
+
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pershin-daniil/internship_backend_2022/internal/logger"
-	"github.com/pershin-daniil/internship_backend_2022/internal/models"
-	"github.com/pershin-daniil/internship_backend_2022/internal/pgstore"
 	"github.com/pershin-daniil/internship_backend_2022/internal/server"
-	"github.com/pershin-daniil/internship_backend_2022/internal/service"
+	"github.com/pershin-daniil/internship_backend_2022/pkg/service"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 )
@@ -28,7 +29,10 @@ const (
 )
 
 const (
-	addFundsEndpoint = "/api/v1/addFunds"
+	addFundsEndpoint         = "/api/v1/addFunds"
+	reserveFundsEndpoint     = "/api/v1/reserveFunds"
+	recognizeRevenueEndpoint = "/api/v1/recognizeRevenue"
+	getWalletBalanceEndpoint = "/api/v1/getUserBalance"
 )
 
 type IntegrationTestSuite struct {
@@ -37,7 +41,10 @@ type IntegrationTestSuite struct {
 	store  *pgstore.Store
 	app    *service.Service
 	server *server.Server
-	user   models.AddFundsRequest
+	models.AddFundsRequest
+	models.ReservedFundsRequest
+	models.RecognizeRevenueRequest
+	models.BalanceRequest
 }
 
 func (s *IntegrationTestSuite) SetupSuite() {
@@ -52,46 +59,191 @@ func (s *IntegrationTestSuite) SetupSuite() {
 		_ = s.server.Run(ctx)
 	}()
 	time.Sleep(100 * time.Millisecond)
-	err = s.store.ResetTables(ctx, []string{"history", "users"})
+	err = s.store.ResetTables(ctx, []string{"events", "wallets"})
 	s.Require().NoError(err)
 }
 
 func (s *IntegrationTestSuite) SetupTest() {
-	s.user = s.createNewUserData()
+	s.AddFundsRequest = models.AddFundsRequest{
+		TransactionID: uuid.NewString(),
+		UserID:        1234,
+		Balance:       100,
+	}
+	s.ReservedFundsRequest = models.ReservedFundsRequest{
+		TransactionID: uuid.NewString(),
+		WalletID:      1,
+		ServiceID:     1,
+		OrderID:       1111,
+		Price:         10,
+	}
+	s.RecognizeRevenueRequest = models.RecognizeRevenueRequest{
+		TransactionID: uuid.NewString(),
+		WalletID:      1,
+		ServiceID:     1,
+		OrderID:       1111,
+		Status:        "DONE",
+	}
+	s.BalanceRequest = models.BalanceRequest{UserID: 1234}
 }
 
-func (s *IntegrationTestSuite) TestAddFunds() {
+func (s *IntegrationTestSuite) TestMainWorkFlow() {
 	s.Run("addFunds for new user", func() {
 		ctx := context.Background()
-		var respUser models.AddFundsRequest
-		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.user, &respUser)
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.AddFundsRequest, &respData)
 		s.Require().Equal(http.StatusOK, resp.StatusCode)
-		s.Require().Equal(s.user.UserID, respUser.UserID)
-		s.Require().Equal(s.user.Balance, respUser.Balance)
+		s.Require().Equal(s.AddFundsRequest.UserID, respData.UserID)
+		s.Require().Equal(s.AddFundsRequest.Balance, respData.Balance)
+	})
+
+	s.Run("getBalance normal case", func() {
+		ctx := context.Background()
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodGet, getWalletBalanceEndpoint, s.BalanceRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.BalanceRequest.UserID, respData.UserID)
+		s.Require().Equal(100, respData.Balance)
+		s.Require().Equal(0, respData.Reserved)
 	})
 
 	s.Run("addFunds for old user", func() {
-		s.user.TransactionID = uuid.NewString()
+		s.AddFundsRequest.TransactionID = uuid.NewString()
 		ctx := context.Background()
-		var respUser models.AddFundsRequest
-		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.user, &respUser)
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.AddFundsRequest, &respData)
 		s.Require().Equal(http.StatusOK, resp.StatusCode)
-		s.Require().Equal(s.user.UserID, respUser.UserID)
-		s.Require().Equal(s.user.Balance*2, respUser.Balance)
+		s.Require().Equal(s.AddFundsRequest.UserID, respData.UserID)
+		s.Require().Equal(s.AddFundsRequest.Balance*2, respData.Balance)
+	})
+
+	s.Run("getBalance normal case 2", func() {
+		ctx := context.Background()
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodGet, getWalletBalanceEndpoint, s.BalanceRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.BalanceRequest.UserID, respData.UserID)
+		s.Require().Equal(200, respData.Balance)
+		s.Require().Equal(0, respData.Reserved)
 	})
 
 	s.Run("addFunds for already added transaction", func() {
 		ctx := context.Background()
-		var respUser models.AddFundsRequest
-		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.user, &respUser)
+		var respUser models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.AddFundsRequest, &respUser)
 		s.Require().Equal(http.StatusGone, resp.StatusCode)
-		s.Require().Equal(s.user.Balance*2, 200)
+		s.Require().Equal(s.AddFundsRequest.Balance*2, 200)
 	})
-}
 
-func (s *IntegrationTestSuite) TestReserveFunds() {
 	s.Run("reserveFunds normal case", func() {
-		s.T().Skip()
+		ctx := context.Background()
+		var respData models.EventsBodyResponse
+		resp := s.sendRequest(ctx, http.MethodPost, reserveFundsEndpoint, s.ReservedFundsRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.ReservedFundsRequest.WalletID, respData.WalletID)
+		s.Require().Equal(s.ReservedFundsRequest.ServiceID, respData.ServiceID)
+		s.Require().Equal(s.ReservedFundsRequest.OrderID, respData.OrderID)
+		s.Require().Equal(s.ReservedFundsRequest.Price, respData.Price)
+	})
+
+	s.Run("getBalance with reserve", func() {
+		ctx := context.Background()
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodGet, getWalletBalanceEndpoint, s.BalanceRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.BalanceRequest.UserID, respData.UserID)
+		s.Require().Equal(200, respData.Balance)
+		s.Require().Equal(s.ReservedFundsRequest.Price, respData.Reserved)
+	})
+
+	s.Run("reserveFunds one more order", func() {
+		ctx := context.Background()
+		var respData models.EventsBodyResponse
+		s.ReservedFundsRequest.TransactionID = uuid.NewString()
+		s.ReservedFundsRequest.OrderID = 2222
+		s.ReservedFundsRequest.Price = 50
+		resp := s.sendRequest(ctx, http.MethodPost, reserveFundsEndpoint, s.ReservedFundsRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.ReservedFundsRequest.WalletID, respData.WalletID)
+		s.Require().Equal(s.ReservedFundsRequest.ServiceID, respData.ServiceID)
+		s.Require().Equal(s.ReservedFundsRequest.OrderID, respData.OrderID)
+		s.Require().Equal(s.ReservedFundsRequest.Price, respData.Price)
+	})
+
+	s.Run("getBalance with reserve 2", func() {
+		ctx := context.Background()
+		var respData models.WalletResponse
+		resp := s.sendRequest(ctx, http.MethodGet, getWalletBalanceEndpoint, s.BalanceRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.BalanceRequest.UserID, respData.UserID)
+		s.Require().Equal(200, respData.Balance)
+		s.Require().Equal(60, respData.Reserved)
+	})
+
+	s.Run("reserveFunds for already added transaction", func() {
+		ctx := context.Background()
+		var respData models.EventsBodyResponse
+		resp := s.sendRequest(ctx, http.MethodPost, reserveFundsEndpoint, s.ReservedFundsRequest, &respData)
+		s.Require().Equal(http.StatusGone, resp.StatusCode)
+	})
+
+	s.Run("reserveFunds same order", func() {
+		s.ReservedFundsRequest.TransactionID = uuid.NewString()
+		ctx := context.Background()
+		var respData models.EventsBodyResponse
+		resp := s.sendRequest(ctx, http.MethodPost, reserveFundsEndpoint, s.ReservedFundsRequest, &respData)
+		s.Require().Equal(http.StatusBadRequest, resp.StatusCode)
+	})
+
+	s.Run("reserveFunds too high price", func() {
+		s.T().Log(s.ReservedFundsRequest)
+		s.ReservedFundsRequest.TransactionID = uuid.NewString()
+		s.ReservedFundsRequest.OrderID = uuid.ClockSequence() + 10
+		s.ReservedFundsRequest.Price = 100000
+		ctx := context.Background()
+		var respData models.EventsBodyResponse
+		resp := s.sendRequest(ctx, http.MethodPost, reserveFundsEndpoint, s.ReservedFundsRequest, &respData)
+		s.Require().Equal(http.StatusBadRequest, resp.StatusCode)
+	})
+
+	s.Run("recognizeRevenue normal case - status DONE", func() {
+		ctx := context.Background()
+		var respData models.EventsBodyResponse
+		resp := s.sendRequest(ctx, http.MethodPost, recognizeRevenueEndpoint, s.RecognizeRevenueRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.RecognizeRevenueRequest.Status, respData.Status)
+		s.Require().Equal(s.RecognizeRevenueRequest.OrderID, respData.OrderID)
+		s.Require().Equal(s.RecognizeRevenueRequest.ServiceID, respData.ServiceID)
+		s.Require().Equal(s.RecognizeRevenueRequest.WalletID, respData.WalletID)
+	})
+
+	s.Run("recognizeRevenue same transaction", func() {
+		ctx := context.Background()
+		var respData models.EventsBodyResponse
+		resp := s.sendRequest(ctx, http.MethodPost, recognizeRevenueEndpoint, s.RecognizeRevenueRequest, &respData)
+		s.Require().Equal(http.StatusGone, resp.StatusCode)
+	})
+
+	s.Run("recognizeRevenue normal case - status CANCEL", func() {
+		s.RecognizeRevenueRequest.TransactionID = uuid.NewString()
+		s.RecognizeRevenueRequest.Status = "CANCELED"
+		s.RecognizeRevenueRequest.OrderID = 2222
+		ctx := context.Background()
+		var respData models.EventsBodyResponse
+		resp := s.sendRequest(ctx, http.MethodPost, recognizeRevenueEndpoint, s.RecognizeRevenueRequest, &respData)
+		s.Require().Equal(http.StatusOK, resp.StatusCode)
+		s.Require().Equal(s.RecognizeRevenueRequest.Status, respData.Status)
+		s.Require().Equal(s.RecognizeRevenueRequest.OrderID, respData.OrderID)
+		s.Require().Equal(s.RecognizeRevenueRequest.ServiceID, respData.ServiceID)
+		s.Require().Equal(s.RecognizeRevenueRequest.WalletID, respData.WalletID)
+	})
+
+	s.Run("recognizeRevenue weird order", func() {
+		s.RecognizeRevenueRequest.TransactionID = uuid.NewString()
+		s.RecognizeRevenueRequest.OrderID = 0
+		ctx := context.Background()
+		var respData models.EventsBodyResponse
+		resp := s.sendRequest(ctx, http.MethodPost, recognizeRevenueEndpoint, s.RecognizeRevenueRequest, &respData)
+		s.Require().Equal(http.StatusBadRequest, resp.StatusCode)
 	})
 }
 
@@ -113,15 +265,6 @@ func (s *IntegrationTestSuite) sendRequest(ctx context.Context, method, endpoint
 		s.Require().NoError(err)
 	}
 	return resp
-}
-
-func (s *IntegrationTestSuite) createNewUserData() models.AddFundsRequest {
-	s.T().Helper()
-	return models.AddFundsRequest{
-		TransactionID: uuid.NewString(),
-		UserID:        uuid.ClockSequence(),
-		Balance:       100,
-	}
 }
 
 func TestIntegrationTestSuite(t *testing.T) {

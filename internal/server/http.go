@@ -28,7 +28,6 @@ func New(log *logrus.Logger, address string, version string, app App) *Server {
 	}
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Get("/", s.rootHandler)
 	r.Route("/api", func(r chi.Router) {
 		r.Route("/v1", func(r chi.Router) {
 			r.Post("/addFunds", s.addFundsHandler)
