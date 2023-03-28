@@ -17,5 +17,5 @@ curl --location 'localhost:8080/api/v1/addFunds' \
 #### Response
 
 ```json
-{"transactionID":"transaction-uuid","userID":1,"account_balance":100}
+{"id":3,"userID":1,"account_balance":100,"updatedAt":"2023-03-27T12:07:33.352266+03:00"}
 ```

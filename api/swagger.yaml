@@ -21,21 +21,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/addFundsBody'
+              $ref: '#/components/schemas/addFundsRequest'
       responses:
         200:
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/addFundsBody'
+                $ref: '#/components/schemas/addFundsResponse'
         410:
-          description: Returns status code and word "Gone" which means transaction has already made.
-
+          description: Gone. Transaction already has been made.
 
 components:
   schemas:
-    addFundsBody:
+    addFundsRequest:
       type: object
       properties:
         transactionID:
@@ -50,3 +49,22 @@ components:
           type: integer
           format: int
           example: 100
+    addFundsResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int
+          example: 3
+        userID:
+          type: integer
+          format: int
+          example: 10
+        account_balance:
+          type: integer
+          format: int
+          example: 100
+        updatedAt:
+          type: string
+          format: 'date-time'
+          example: '2023-03-27T12:07:33.352266+03:00'

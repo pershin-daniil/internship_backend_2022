@@ -4,8 +4,8 @@ lint:
 	golangci-lint run
 
 up:
-	docker-compose up -d
+	docker compose up -d
 
 test-integration: up
 	go test -v ./tests/integration_test.go
-	docker-compose down
+	docker compose down
