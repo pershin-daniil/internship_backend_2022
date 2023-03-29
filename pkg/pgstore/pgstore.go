@@ -30,7 +30,7 @@ type Store struct {
 func New(ctx context.Context, log *logrus.Logger, dsn string) (*Store, error) {
 	db, err := sqlx.ConnectContext(ctx, "pgx", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("create new strore faild: %w", err)
+		return nil, fmt.Errorf("create new strore failed: %w", err)
 	}
 	return &Store{
 		log: log.WithField("module", "pgstore"),
@@ -41,11 +41,11 @@ func New(ctx context.Context, log *logrus.Logger, dsn string) (*Store, error) {
 func (s *Store) AddFunds(ctx context.Context, data models.AddFundsRequest) (models.WalletResponse, error) {
 	tx, err := s.db.Beginx()
 	if err != nil {
-		return models.WalletResponse{}, fmt.Errorf("add funds faild: %w", err)
+		return models.WalletResponse{}, fmt.Errorf("add funds failed: %w", err)
 	}
 	defer func() {
 		if err = tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			s.log.Warnf("add funds faild: %v", err)
+			s.log.Warnf("add funds failed: %v", err)
 		}
 	}()
 
@@ -70,29 +70,29 @@ RETURNING id, user_id, account_balance, reserved, updated_at;`)
 		return result, nil
 	}
 
-	return models.WalletResponse{}, fmt.Errorf("add funds faild: %w", err)
+	return models.WalletResponse{}, fmt.Errorf("add funds failed: %w", err)
 }
 
 func (s *Store) ReserveFunds(ctx context.Context, data models.ReservedFundsRequest) (models.EventsBodyResponse, error) {
 	tx, err := s.db.Beginx()
 	if err != nil {
-		return models.EventsBodyResponse{}, fmt.Errorf("reserve funds faild: %w", err)
+		return models.EventsBodyResponse{}, fmt.Errorf("reserve funds failed: %w", err)
 	}
 	defer func() {
 		if err = tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			s.log.Warnf("reserve funds faild: %v", err)
+			s.log.Warnf("reserve funds failed: %v", err)
 		}
 	}()
 
 	if ok, e := s.isEnoughFunds(ctx, tx, data.WalletID, data.Price); !ok {
 		if e != nil {
-			return models.EventsBodyResponse{}, fmt.Errorf("reserve funds faild: %w", e)
+			return models.EventsBodyResponse{}, fmt.Errorf("reserve funds failed: %w", e)
 		}
 		return models.EventsBodyResponse{}, ErrNotEnoughFunds
 	}
 	if ok, e := s.reserveFunds(ctx, tx, data.WalletID, data.Price); !ok {
 		if e != nil {
-			return models.EventsBodyResponse{}, fmt.Errorf("reserve funds faild: %w", e)
+			return models.EventsBodyResponse{}, fmt.Errorf("reserve funds failed: %w", e)
 		}
 		return models.EventsBodyResponse{}, ErrUserNotExists
 	}
@@ -111,30 +111,30 @@ ON CONFLICT (order_id) DO NOTHING RETURNING id, wallet_id, service_id, order_id,
 			continue
 		}
 		if err = tx.Commit(); err != nil {
-			return models.EventsBodyResponse{}, fmt.Errorf("reserved funds faild: %w", err)
+			return models.EventsBodyResponse{}, fmt.Errorf("reserved funds failed: %w", err)
 		}
 		return result, nil
 	}
 
-	return models.EventsBodyResponse{}, fmt.Errorf("reserved funds faild: %w", err)
+	return models.EventsBodyResponse{}, fmt.Errorf("reserved funds failed: %w", err)
 }
 
 func (s *Store) RecognizeRevenue(ctx context.Context, data models.RecognizeRevenueRequest) (models.EventsBodyResponse, error) {
 	tx, err := s.db.Beginx()
 	if err != nil {
-		return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue faild: %w", err)
+		return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
 	}
 	defer func() {
 		if err = tx.Rollback(); err != nil && errors.Is(err, sql.ErrTxDone) {
-			s.log.Warnf("recognize revenue faild: %v", err)
+			s.log.Warnf("recognize revenue failed: %v", err)
 		}
 	}()
 	price, err := s.checkPrice(ctx, tx, data.OrderID)
 	if err != nil {
-		return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue faild: %w", err)
+		return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
 	}
 	if err = s.changeBalance(ctx, tx, data.WalletID, price, data.Status); err != nil {
-		return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue faild: %w", err)
+		return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
 	}
 	query := `
 UPDATE events
@@ -146,16 +146,16 @@ RETURNING id, wallet_id, service_id, order_id, price, status, datetime`
 		err = tx.GetContext(ctx, &result, query, data.OrderID, data.Status)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue faild: %w", err)
+			return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
 		case err != nil:
 			continue
 		}
 		if err = tx.Commit(); err != nil {
-			return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue faild: %w", err)
+			return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
 		}
 		return result, nil
 	}
-	return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue faild: %w", err)
+	return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
 }
 
 func (s *Store) WalletBalance(ctx context.Context, data models.BalanceRequest) (models.WalletResponse, error) {
@@ -174,7 +174,7 @@ WHERE user_id = $1`
 		}
 		return result, nil
 	}
-	return models.WalletResponse{}, fmt.Errorf("get user balance faild: %w", err)
+	return models.WalletResponse{}, fmt.Errorf("get user balance failed: %w", err)
 }
 
 type q interface {
@@ -198,7 +198,7 @@ WHERE id = $1;`
 		}
 		return balance >= price, nil
 	}
-	return false, fmt.Errorf("check if enough funds faild: %w", err)
+	return false, fmt.Errorf("check if enough funds failed: %w", err)
 }
 
 func (s *Store) reserveFunds(ctx context.Context, q q, id int, price int) (bool, error) {
@@ -219,7 +219,7 @@ RETURNING TRUE;`
 		}
 		return ok, nil
 	}
-	return false, fmt.Errorf("reserve faild: %w", err)
+	return false, fmt.Errorf("reserve failed: %w", err)
 }
 
 func (s *Store) changeBalance(ctx context.Context, q q, id int, price int, status string) error {
@@ -247,7 +247,7 @@ func (s *Store) changeBalance(ctx context.Context, q q, id int, price int, statu
 			return nil
 		}
 	}
-	return fmt.Errorf("change balance faild: %v", err)
+	return fmt.Errorf("change balance failed: %v", err)
 }
 
 func (s *Store) checkPrice(ctx context.Context, q q, orderID int) (int, error) {
@@ -266,7 +266,7 @@ WHERE order_id = $1;`
 		}
 		return price, nil
 	}
-	return 0, fmt.Errorf("check price faild: %w", err)
+	return 0, fmt.Errorf("check price failed: %w", err)
 }
 
 func (s *Store) ResetTables(ctx context.Context, tables []string) error {

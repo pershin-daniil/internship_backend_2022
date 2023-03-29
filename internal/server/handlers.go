@@ -117,12 +117,12 @@ func (s *Server) writeResponse(w http.ResponseWriter, status int, data interface
 	w.Header().Set("Content-Type", "application/json")
 	if x, ok := data.(error); ok {
 		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: x.Error()}); err != nil {
-			s.log.Warnf("write response faild: %v", err)
+			s.log.Warnf("write response failed: %v", err)
 		}
 		return
 	}
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		s.log.Warnf("write response faild: %v", err)
+		s.log.Warnf("write response failed: %v", err)
 	}
 }
 
