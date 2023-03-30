@@ -6,6 +6,12 @@ lint:
 up:
 	docker compose up -d
 
-test-integration: up
+down:
+	docker compose down
+
+test: up
 	go test -v ./tests/integration_test.go
 	docker compose down
+
+run: up
+	go run ./cmd/main.go

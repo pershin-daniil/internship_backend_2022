@@ -20,7 +20,7 @@ const (
 	version = "0.0.1"
 )
 
-var pgDSN = os.Getenv("PG_DSN")
+var pgDSN = "postgres://postgres:secret@localhost:6432/internship?sslmode=disable"
 
 func main() {
 	log := logger.New()
