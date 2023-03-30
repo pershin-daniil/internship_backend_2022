@@ -48,7 +48,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := s.Run(ctx); err != nil {
+		if err = s.Run(ctx); err != nil {
 			log.Panic(err)
 		}
 	}()
