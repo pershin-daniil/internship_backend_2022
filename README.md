@@ -34,13 +34,15 @@ cd internship_backend_2022
 go mod tidy
 ```
 
+`make up` - to start docker container, and then you need databases. So, [here](./pkg/pgstore/create_table.sql) file to create tables.
+
 Run command to start server. This command up docker container and run `main.go`.
 
 ```shell
 make run
 ```
 
-Now you can try [commands](#api-methods-description-) in your shell and see the results.
+Now you can try [commands](#api-methods-description-) in your shell and see the results. Don't forget to create tables in database. File to create tables [here](./pkg/pgstore/create_table.sql)
 
 To check tests 👇 This command up docker container, then run tests, and finally remove docker container.
 

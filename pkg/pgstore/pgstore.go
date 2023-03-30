@@ -13,8 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const retries = 3
-
 var (
 	ErrNotEnoughFunds    = fmt.Errorf("not enough funds")
 	ErrUserNotExists     = fmt.Errorf("user doesn't exist")
@@ -39,16 +37,6 @@ func New(ctx context.Context, log *logrus.Logger, dsn string) (*Store, error) {
 }
 
 func (s *Store) AddFunds(ctx context.Context, data models.AddFundsRequest) (models.WalletResponse, error) {
-	tx, err := s.db.Beginx()
-	if err != nil {
-		return models.WalletResponse{}, fmt.Errorf("add funds failed: %w", err)
-	}
-	defer func() {
-		if err = tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			s.log.Warnf("add funds failed: %v", err)
-		}
-	}()
-
 	var query strings.Builder
 
 	query.WriteString(`INSERT INTO wallets (user_id, account_balance)
@@ -60,17 +48,10 @@ RETURNING id, user_id, account_balance, reserved, updated_at;`)
 
 	var result models.WalletResponse
 
-	for i := 0; i < retries; i++ {
-		if err = tx.GetContext(ctx, &result, query.String(), data.UserID, data.Balance); err != nil {
-			continue
-		}
-		if err = tx.Commit(); err != nil {
-			return models.WalletResponse{}, err
-		}
-		return result, nil
+	if err := s.db.GetContext(ctx, &result, query.String(), data.UserID, data.Balance); err != nil {
+		return models.WalletResponse{}, fmt.Errorf("add funds failed: %w", err)
 	}
-
-	return models.WalletResponse{}, fmt.Errorf("add funds failed: %w", err)
+	return result, nil
 }
 
 func (s *Store) ReserveFunds(ctx context.Context, data models.ReservedFundsRequest) (models.EventsBodyResponse, error) {
@@ -90,6 +71,7 @@ func (s *Store) ReserveFunds(ctx context.Context, data models.ReservedFundsReque
 		}
 		return models.EventsBodyResponse{}, ErrNotEnoughFunds
 	}
+
 	if ok, e := s.reserveFunds(ctx, tx, data.WalletID, data.Price); !ok {
 		if e != nil {
 			return models.EventsBodyResponse{}, fmt.Errorf("reserve funds failed: %w", e)
@@ -102,21 +84,17 @@ VALUES ($1, $2, $3, $4)
 ON CONFLICT (order_id) DO NOTHING RETURNING id, wallet_id, service_id, order_id, price, datetime;`
 	var result models.EventsBodyResponse
 
-	for i := 0; i < retries; i++ {
-		err = tx.GetContext(ctx, &result, query, data.WalletID, data.ServiceID, data.OrderID, data.Price)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return models.EventsBodyResponse{}, ErrOrderAlreadyAdded
-		case err != nil:
-			continue
-		}
-		if err = tx.Commit(); err != nil {
-			return models.EventsBodyResponse{}, fmt.Errorf("reserved funds failed: %w", err)
-		}
-		return result, nil
+	err = tx.GetContext(ctx, &result, query, data.WalletID, data.ServiceID, data.OrderID, data.Price)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return models.EventsBodyResponse{}, ErrOrderAlreadyAdded
+	case err != nil:
+		return models.EventsBodyResponse{}, fmt.Errorf("reserved funds failed: %w", err)
 	}
-
-	return models.EventsBodyResponse{}, fmt.Errorf("reserved funds failed: %w", err)
+	if err = tx.Commit(); err != nil {
+		return models.EventsBodyResponse{}, fmt.Errorf("reserved funds failed: %w", err)
+	}
+	return result, nil
 }
 
 func (s *Store) RecognizeRevenue(ctx context.Context, data models.RecognizeRevenueRequest) (models.EventsBodyResponse, error) {
@@ -142,20 +120,18 @@ SET status = $2
 WHERE order_id = $1
 RETURNING id, wallet_id, service_id, order_id, price, status, datetime`
 	var result models.EventsBodyResponse
-	for i := 0; i < retries; i++ {
-		err = tx.GetContext(ctx, &result, query, data.OrderID, data.Status)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
-		case err != nil:
-			continue
-		}
-		if err = tx.Commit(); err != nil {
-			return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
-		}
-		return result, nil
+
+	err = tx.GetContext(ctx, &result, query, data.OrderID, data.Status)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
+	case err != nil:
+		return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
 	}
-	return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
+	if err = tx.Commit(); err != nil {
+		return models.EventsBodyResponse{}, fmt.Errorf("recognize revenue failed: %w", err)
+	}
+	return result, nil
 }
 
 func (s *Store) WalletBalance(ctx context.Context, data models.BalanceRequest) (models.WalletResponse, error) {
@@ -163,18 +139,15 @@ func (s *Store) WalletBalance(ctx context.Context, data models.BalanceRequest) (
 SELECT id, user_id, account_balance, reserved, updated_at FROM wallets
 WHERE user_id = $1`
 	var result models.WalletResponse
-	var err error
-	for i := 0; i < retries; i++ {
-		err = s.db.GetContext(ctx, &result, query, data.UserID)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return models.WalletResponse{}, ErrUserNotExists
-		case err != nil:
-			continue
-		}
-		return result, nil
+
+	err := s.db.GetContext(ctx, &result, query, data.UserID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return models.WalletResponse{}, ErrUserNotExists
+	case err != nil:
+		return models.WalletResponse{}, fmt.Errorf("get user balance failed: %w", err)
 	}
-	return models.WalletResponse{}, fmt.Errorf("get user balance failed: %w", err)
+	return result, nil
 }
 
 type q interface {
@@ -187,18 +160,15 @@ SELECT account_balance - wallets.reserved AS balance
 FROM wallets
 WHERE id = $1;`
 	var balance int
-	var err error
-	for i := 0; i < retries; i++ {
-		err = q.GetContext(ctx, &balance, query, id)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return false, nil
-		case err != nil:
-			continue
-		}
-		return balance >= price, nil
+
+	err := q.GetContext(ctx, &balance, query, id)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("check if enough funds failed: %w", err)
 	}
-	return false, fmt.Errorf("check if enough funds failed: %w", err)
+	return balance >= price, nil
 }
 
 func (s *Store) reserveFunds(ctx context.Context, q q, id int, price int) (bool, error) {
@@ -208,18 +178,15 @@ SET reserved = reserved + $2
 WHERE id = $1
 RETURNING TRUE;`
 	var ok bool
-	var err error
-	for i := 0; i < retries; i++ {
-		err = q.GetContext(ctx, &ok, query, id, price)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return false, nil
-		case err != nil:
-			continue
-		}
-		return ok, nil
+
+	err := q.GetContext(ctx, &ok, query, id, price)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("reserve failed: %w", err)
 	}
-	return false, fmt.Errorf("reserve failed: %w", err)
+	return ok, nil
 }
 
 func (s *Store) changeBalance(ctx context.Context, q q, id int, price int, status string) error {
@@ -238,16 +205,11 @@ func (s *Store) changeBalance(ctx context.Context, q q, id int, price int, statu
 		RETURNING TRUE;`
 	}
 	var ok bool
-	var err error
-	for i := 0; i < retries; i++ {
-		if err = q.GetContext(ctx, &ok, query, id, price); err != nil {
-			continue
-		}
-		if ok {
-			return nil
-		}
+
+	if err := q.GetContext(ctx, &ok, query, id, price); err != nil {
+		return fmt.Errorf("change balance failed: %v", err)
 	}
-	return fmt.Errorf("change balance failed: %v", err)
+	return nil
 }
 
 func (s *Store) checkPrice(ctx context.Context, q q, orderID int) (int, error) {
@@ -255,18 +217,15 @@ func (s *Store) checkPrice(ctx context.Context, q q, orderID int) (int, error) {
 SELECT price FROM events
 WHERE order_id = $1;`
 	var price int
-	var err error
-	for i := 0; i < retries; i++ {
-		err = q.GetContext(ctx, &price, query, orderID)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return 0, ErrOrderNotExists
-		case err != nil:
-			continue
-		}
-		return price, nil
+
+	err := q.GetContext(ctx, &price, query, orderID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return 0, ErrOrderNotExists
+	case err != nil:
+		return 0, fmt.Errorf("check price failed: %w", err)
 	}
-	return 0, fmt.Errorf("check price failed: %w", err)
+	return price, nil
 }
 
 func (s *Store) ResetTables(ctx context.Context, tables []string) error {

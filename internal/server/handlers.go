@@ -27,7 +27,7 @@ func (s *Server) addFundsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, ok := txs[data.TransactionID]; ok {
-		s.writeResponse(w, http.StatusGone, nil)
+		s.writeResponse(w, http.StatusConflict, nil)
 		return
 	}
 	resp, err := s.app.AddFunds(ctx, data)
@@ -48,7 +48,7 @@ func (s *Server) reserveFundsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, ok := txs[data.TransactionID]; ok {
-		s.writeResponse(w, http.StatusGone, nil)
+		s.writeResponse(w, http.StatusConflict, nil)
 		return
 	}
 	resp, err := s.app.ReserveFunds(ctx, data)
@@ -78,7 +78,7 @@ func (s *Server) recognizeRevenueHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if _, ok := txs[data.TransactionID]; ok {
-		s.writeResponse(w, http.StatusGone, nil)
+		s.writeResponse(w, http.StatusConflict, nil)
 		return
 	}
 	resp, err := s.app.RecognizeRevenue(ctx, data)
