@@ -130,7 +130,7 @@ func (s *IntegrationTestSuite) TestMainWorkFlow() {
 		ctx := context.Background()
 		var respUser models.WalletResponse
 		resp := s.sendRequest(ctx, http.MethodPost, addFundsEndpoint, s.AddFundsRequest, &respUser)
-		s.Require().Equal(http.StatusGone, resp.StatusCode)
+		s.Require().Equal(http.StatusConflict, resp.StatusCode)
 		s.Require().Equal(s.AddFundsRequest.Balance*2, 200)
 	})
 
@@ -183,7 +183,7 @@ func (s *IntegrationTestSuite) TestMainWorkFlow() {
 		ctx := context.Background()
 		var respData models.EventsBodyResponse
 		resp := s.sendRequest(ctx, http.MethodPost, reserveFundsEndpoint, s.ReservedFundsRequest, &respData)
-		s.Require().Equal(http.StatusGone, resp.StatusCode)
+		s.Require().Equal(http.StatusConflict, resp.StatusCode)
 	})
 
 	s.Run("reserveFunds same order", func() {
@@ -220,7 +220,7 @@ func (s *IntegrationTestSuite) TestMainWorkFlow() {
 		ctx := context.Background()
 		var respData models.EventsBodyResponse
 		resp := s.sendRequest(ctx, http.MethodPost, recognizeRevenueEndpoint, s.RecognizeRevenueRequest, &respData)
-		s.Require().Equal(http.StatusGone, resp.StatusCode)
+		s.Require().Equal(http.StatusConflict, resp.StatusCode)
 	})
 
 	s.Run("recognizeRevenue normal case - status CANCEL", func() {
